@@ -3,11 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Video Loop Gallery</title>
+<title>Single Video Focus</title>
 <style>
   :root {
     --bg: #0b0c0f;
-    --card: #12151a;
     --text: #e6e7eb;
     --muted: #8a93a3;
     --accent: #6ee7ff;
@@ -18,19 +17,24 @@
     background: radial-gradient(1200px 800px at 70% -10%, #1a2233 0%, var(--bg) 60%);
     color: var(--text);
     font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-    min-height: 100vh;
     padding: 24px;
   }
 
   header {
-    max-width: 1200px;
+    max-width: 900px;
     margin: 0 auto 24px;
     display: flex;
-    align-items: center;
     justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    background: rgba(11,12,15,0.7);
+    backdrop-filter: blur(10px);
+    padding: 12px 0;
+    z-index: 10;
   }
 
-  h1 { font-size: clamp(1.4rem, 3vw, 2.2rem); font-weight: 700; }
+  h1 { font-size: clamp(1.4rem, 3vw, 2rem); }
   .badge {
     background: rgba(110, 231, 255, 0.1);
     border: 1px solid rgba(110, 231, 255, 0.3);
@@ -41,50 +45,56 @@
   }
 
   .grid {
-    max-width: 1200px;
+    max-width: 900px;
     margin: 0 auto;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 40px; /* big gap so only 1 is centered */
   }
 
   .card {
     background: rgba(255,255,255,0.03);
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 16px;
+    border-radius: 20px;
     overflow: hidden;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    transition: transform 0.25s ease;
+    min-height: 80vh; /* force scroll so only 1 is centered */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    transition: border-color 0.3s ease, transform 0.3s ease;
   }
-  .card:hover { transform: translateY(-4px); }
+
+  .card.active {
+    border-color: var(--accent);
+    transform: scale(1.02);
+  }
 
   video {
     width: 100%;
     aspect-ratio: 16/9;
     object-fit: cover;
-    display: block;
     background: #000;
   }
 
   .meta {
-    padding: 12px 14px;
+    padding: 16px;
     display: flex;
     justify-content: space-between;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     color: var(--muted);
   }
 
-  .loader { text-align: center; padding: 40px; color: var(--muted); }
+  .loader { text-align: center; padding: 60px; color: var(--muted); }
 </style>
 </head>
 <body>
   <header>
-    <h1>Video Loop</h1>
+    <h1>Focus Player</h1>
     <span class="badge" id="count">Loading...</span>
   </header>
 
   <main class="grid" id="videoGrid">
-    <div class="loader">Scanning for videos: /1.mp4, /2.mp4...</div>
+    <div class="loader">Scanning for /1.mp4, /2.mp4...</div>
   </main>
 
 <script>
@@ -93,6 +103,7 @@
   let videoIndex = 1;
   let loadedCount = 0;
   const maxVideos = 100;
+  let currentActive = null;
 
   async function videoExists(url) {
     try {
@@ -106,34 +117,50 @@
     card.className = 'card';
     
     const video = document.createElement('video');
-    video.dataset.src = src; // don't load yet
+    video.dataset.src = src;
     video.muted = true;
     video.loop = true;
     video.playsInline = true;
-    video.preload = 'none'; // key: don't preload
-    video.poster = ''; // optional: add /1.jpg etc
+    video.preload = 'none';
     
     const meta = document.createElement('div');
     meta.className = 'meta';
-    meta.innerHTML = `<span>Video #${index}</span><span>${src}</span>`;
+    meta.innerHTML = `<span>Video #${index}</span><span>Click to unmute</span>`;
     
     card.appendChild(video);
     card.appendChild(meta);
     return {card, video};
   }
 
-  // IntersectionObserver: only load + play when visible
+  // Only trigger when video is ~50% in center of screen
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
-      const video = entry.target;
-      if (entry.isIntersecting) {
-        if (!video.src) video.src = video.dataset.src; // load now
-        video.play().catch(()=>{}); // autoplay
+      const card = entry.target;
+      const video = card.querySelector('video');
+      
+      if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+        // This is the middle one
+        if (currentActive && currentActive !== video) {
+          currentActive.pause();
+          currentActive.src = ''; // unload previous to free memory
+          currentActive.closest('.card').classList.remove('active');
+        }
+        
+        if (!video.src) video.src = video.dataset.src; // load only this one
+        video.play().catch(()=>{});
+        card.classList.add('active');
+        currentActive = video;
+        
       } else {
-        video.pause(); // pause when off screen to save resources
+        // not in center anymore
+        if (video.src) {
+          video.pause();
+          video.src = ''; // unload it
+        }
+        card.classList.remove('active');
       }
     });
-  }, { rootMargin: '200px', threshold: 0.25 }); // load a bit before it enters view
+  }, { threshold: 0.5 }); // 50% of card must be visible
 
   async function loadVideos() {
     grid.innerHTML = '';
@@ -143,7 +170,7 @@
       if (exists) {
         const {card, video} = createVideoCard(url, videoIndex);
         grid.appendChild(card);
-        observer.observe(video); // watch this video
+        observer.observe(card); // observe the card, not just video
         loadedCount++;
       } else {
         if (loadedCount === 0) {
@@ -153,7 +180,7 @@
       }
       videoIndex++;
     }
-    countBadge.textContent = `${loadedCount} video${loadedCount !== 1 ? 's' : ''} loaded`;
+    countBadge.textContent = `${loadedCount} video${loadedCount !== 1 ? 's' : ''}`;
   }
 
   loadVideos();
