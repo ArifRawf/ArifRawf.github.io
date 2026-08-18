@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Single Video Focus</title>
+<title>ArifRawf.github.io</title>
 <style>
   :root {
     --bg: #0b0c0f;
@@ -12,14 +12,12 @@
     --accent: #6ee7ff;
   }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
   body {
     background: radial-gradient(1200px 800px at 70% -10%, #1a2233 0%, var(--bg) 60%);
     color: var(--text);
     font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     padding: 24px;
   }
-
   header {
     max-width: 900px;
     margin: 0 auto 24px;
@@ -33,7 +31,6 @@
     padding: 12px 0;
     z-index: 10;
   }
-
   h1 { font-size: clamp(1.4rem, 3vw, 2rem); }
   .badge {
     background: rgba(110, 231, 255, 0.1);
@@ -43,47 +40,30 @@
     border-radius: 999px;
     font-size: 0.85rem;
   }
-
-  .grid {
-    max-width: 900px;
-    margin: 0 auto;
-    display: flex;
-    flex-direction: column;
-    gap: 40px; /* big gap so only 1 is centered */
-  }
-
+  .grid { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
   .card {
     background: rgba(255,255,255,0.03);
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 20px;
     overflow: hidden;
-    min-height: 80vh; /* force scroll so only 1 is centered */
+    min-height: 80vh;
     display: flex;
     flex-direction: column;
     justify-content: center;
     transition: border-color 0.3s ease, transform 0.3s ease;
   }
-
-  .card.active {
-    border-color: var(--accent);
-    transform: scale(1.02);
-  }
-
-  video {
-    width: 100%;
-    aspect-ratio: 16/9;
-    object-fit: cover;
-    background: #000;
-  }
-
+  .card.active { border-color: var(--accent); transform: scale(1.02); }
+  video { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #000; }
   .meta {
     padding: 16px;
     display: flex;
     justify-content: space-between;
+    align-items: center;
     font-size: 0.95rem;
     color: var(--muted);
   }
-
+  .views { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--text); }
+  .views svg { width: 18px; height: 18px; }
   .loader { text-align: center; padding: 60px; color: var(--muted); }
 </style>
 </head>
@@ -98,12 +78,32 @@
   </main>
 
 <script>
+  const NAMESPACE = 'myvideogallery2026'; // change this to make it unique for your site
   const grid = document.getElementById('videoGrid');
   const countBadge = document.getElementById('count');
   let videoIndex = 1;
   let loadedCount = 0;
   const maxVideos = 100;
   let currentActive = null;
+  const countedThisSession = new Set(); // prevent double count on same scroll
+
+  const formatViews = (n) => {
+    if (n >= 1000000) return (n/1000000).toFixed(1)+'M';
+    if (n >= 1000) return (n/1000).toFixed(1)+'K';
+    return n;
+  };
+
+  // CountAPI helpers
+  async function getViews(id) {
+    const res = await fetch(`https://api.countapi.xyz/get/${NAMESPACE}/video-${id}`);
+    const data = await res.json();
+    return data.value || 0;
+  }
+  async function hitView(id) {
+    const res = await fetch(`https://api.countapi.xyz/hit/${NAMESPACE}/video-${id}`);
+    const data = await res.json();
+    return data.value;
+  }
 
   async function videoExists(url) {
     try {
@@ -112,55 +112,70 @@
     } catch { return false; }
   }
 
-  function createVideoCard(src, index) {
+  async function createVideoCard(src, index) {
     const card = document.createElement('div');
     card.className = 'card';
-    
+    card.dataset.id = index;
+
     const video = document.createElement('video');
     video.dataset.src = src;
     video.muted = true;
     video.loop = true;
     video.playsInline = true;
     video.preload = 'none';
-    
+
+    const views = await getViews(index);
     const meta = document.createElement('div');
     meta.className = 'meta';
-    meta.innerHTML = `<span>Video #${index}</span><span>Click to unmute</span>`;
-    
+    meta.innerHTML = `
+      <span>Video #${index}</span>
+      <div class="views">
+        <svg fill="currentColor" viewBox="0 0 20 20"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/><path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.022 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg>
+        <span id="views-${index}">${formatViews(views)}</span>
+      </div>
+    `;
+
     card.appendChild(video);
     card.appendChild(meta);
     return {card, video};
   }
 
-  // Only trigger when video is ~50% in center of screen
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
+  const observer = new IntersectionObserver(async (entries) => {
+    for (const entry of entries) {
       const card = entry.target;
       const video = card.querySelector('video');
-      
+      const id = card.dataset.id;
+
       if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
-        // This is the middle one
+        // unload previous
         if (currentActive && currentActive !== video) {
           currentActive.pause();
-          currentActive.src = ''; // unload previous to free memory
+          currentActive.src = '';
           currentActive.closest('.card').classList.remove('active');
         }
-        
-        if (!video.src) video.src = video.dataset.src; // load only this one
+
+        // load + play this one
+        if (!video.src) video.src = video.dataset.src;
         video.play().catch(()=>{});
         card.classList.add('active');
         currentActive = video;
-        
+
+        // +1 global view, only once per session
+        if (!countedThisSession.has(id)) {
+          const newCount = await hitView(id);
+          document.getElementById(`views-${id}`).textContent = formatViews(newCount);
+          countedThisSession.add(id);
+        }
+
       } else {
-        // not in center anymore
         if (video.src) {
           video.pause();
-          video.src = ''; // unload it
+          video.src = '';
         }
         card.classList.remove('active');
       }
-    });
-  }, { threshold: 0.5 }); // 50% of card must be visible
+    }
+  }, { threshold: 0.5 });
 
   async function loadVideos() {
     grid.innerHTML = '';
@@ -168,9 +183,9 @@
       const url = `/${videoIndex}.mp4`;
       const exists = await videoExists(url);
       if (exists) {
-        const {card, video} = createVideoCard(url, videoIndex);
+        const {card, video} = await createVideoCard(url, videoIndex);
         grid.appendChild(card);
-        observer.observe(card); // observe the card, not just video
+        observer.observe(card);
         loadedCount++;
       } else {
         if (loadedCount === 0) {
