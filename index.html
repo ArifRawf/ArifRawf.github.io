@@ -12,7 +12,6 @@
     --muted: #8a93a3;
     --accent: #6ee7ff;
   }
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
@@ -29,15 +28,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
   }
 
-  h1 {
-    font-size: clamp(1.4rem, 3vw, 2.2rem);
-    font-weight: 700;
-    letter-spacing: -0.5px;
-  }
-
+  h1 { font-size: clamp(1.4rem, 3vw, 2.2rem); font-weight: 700; }
   .badge {
     background: rgba(110, 231, 255, 0.1);
     border: 1px solid rgba(110, 231, 255, 0.3);
@@ -56,18 +49,14 @@
   }
 
   .card {
-    background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0));
+    background: rgba(255,255,255,0.03);
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 16px;
     overflow: hidden;
     box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    transition: transform 0.25s ease, border-color 0.25s ease;
+    transition: transform 0.25s ease;
   }
-
-  .card:hover {
-    transform: translateY(-4px);
-    border-color: rgba(110, 231, 255, 0.4);
-  }
+  .card:hover { transform: translateY(-4px); }
 
   video {
     width: 100%;
@@ -81,21 +70,11 @@
     padding: 12px 14px;
     display: flex;
     justify-content: space-between;
-    align-items: center;
     font-size: 0.9rem;
     color: var(--muted);
   }
 
-  .loader {
-    text-align: center;
-    padding: 40px;
-    color: var(--muted);
-  }
-
-  @media (max-width: 600px) {
-    body { padding: 16px; }
-    .grid { gap: 14px; }
-  }
+  .loader { text-align: center; padding: 40px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -105,7 +84,7 @@
   </header>
 
   <main class="grid" id="videoGrid">
-    <div class="loader">Scanning for videos: /1.mp4, /2.mp4, /3.mp4...</div>
+    <div class="loader">Scanning for videos: /1.mp4, /2.mp4...</div>
   </main>
 
 <script>
@@ -113,15 +92,13 @@
   const countBadge = document.getElementById('count');
   let videoIndex = 1;
   let loadedCount = 0;
-  const maxVideos = 100; // safety limit
+  const maxVideos = 100;
 
   async function videoExists(url) {
     try {
       const res = await fetch(url, { method: 'HEAD' });
       return res.ok;
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   }
 
   function createVideoCard(src, index) {
@@ -129,12 +106,12 @@
     card.className = 'card';
     
     const video = document.createElement('video');
-    video.src = src;
-    video.autoplay = true;
+    video.dataset.src = src; // don't load yet
     video.muted = true;
     video.loop = true;
     video.playsInline = true;
-    video.preload = 'metadata';
+    video.preload = 'none'; // key: don't preload
+    video.poster = ''; // optional: add /1.jpg etc
     
     const meta = document.createElement('div');
     meta.className = 'meta';
@@ -142,21 +119,33 @@
     
     card.appendChild(video);
     card.appendChild(meta);
-    return card;
+    return {card, video};
   }
+
+  // IntersectionObserver: only load + play when visible
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      const video = entry.target;
+      if (entry.isIntersecting) {
+        if (!video.src) video.src = video.dataset.src; // load now
+        video.play().catch(()=>{}); // autoplay
+      } else {
+        video.pause(); // pause when off screen to save resources
+      }
+    });
+  }, { rootMargin: '200px', threshold: 0.25 }); // load a bit before it enters view
 
   async function loadVideos() {
     grid.innerHTML = '';
     while (videoIndex <= maxVideos) {
       const url = `/${videoIndex}.mp4`;
       const exists = await videoExists(url);
-      
       if (exists) {
-        const card = createVideoCard(url, videoIndex);
+        const {card, video} = createVideoCard(url, videoIndex);
         grid.appendChild(card);
+        observer.observe(video); // watch this video
         loadedCount++;
       } else {
-        // stop when we hit first missing file
         if (loadedCount === 0) {
           grid.innerHTML = `<div class="loader">No videos found. Add /1.mp4, /2.mp4 to this folder.</div>`;
         }
@@ -167,10 +156,9 @@
     countBadge.textContent = `${loadedCount} video${loadedCount !== 1 ? 's' : ''} loaded`;
   }
 
-  // Start loading on page load
   loadVideos();
 
-  // Optional: click to unmute
+  // click to unmute
   document.addEventListener('click', (e) => {
     if (e.target.tagName === 'VIDEO') {
       e.target.muted = !e.target.muted;
