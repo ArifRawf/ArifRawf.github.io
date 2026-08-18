@@ -1,22 +1,181 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<title>My Video</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Loop Gallery</title>
+<style>
+  :root {
+    --bg: #0b0c0f;
+    --card: #12151a;
+    --text: #e6e7eb;
+    --muted: #8a93a3;
+    --accent: #6ee7ff;
+  }
 
-<meta property="og:title" content="My Video">
-<meta property="og:type" content="video.other">
-<meta property="og:video" content="https://trickbd.com/wp-content/uploads/2026/08/18/Payal-bhabhi-ki-desi-chudai-sex-video-with-Hindi-audio_720-1.mp4">
-<meta property="og:video:type" content="video/mp4">
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
+  body {
+    background: radial-gradient(1200px 800px at 70% -10%, #1a2233 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  header {
+    max-width: 1200px;
+    margin: 0 auto 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  h1 {
+    font-size: clamp(1.4rem, 3vw, 2.2rem);
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+
+  .badge {
+    background: rgba(110, 231, 255, 0.1);
+    border: 1px solid rgba(110, 231, 255, 0.3);
+    color: var(--accent);
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+  }
+
+  .grid {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+  }
+
+  .card {
+    background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0));
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    transition: transform 0.25s ease, border-color 0.25s ease;
+  }
+
+  .card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(110, 231, 255, 0.4);
+  }
+
+  video {
+    width: 100%;
+    aspect-ratio: 16/9;
+    object-fit: cover;
+    display: block;
+    background: #000;
+  }
+
+  .meta {
+    padding: 12px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+
+  .loader {
+    text-align: center;
+    padding: 40px;
+    color: var(--muted);
+  }
+
+  @media (max-width: 600px) {
+    body { padding: 16px; }
+    .grid { gap: 14px; }
+  }
+</style>
 </head>
-
 <body>
+  <header>
+    <h1>Video Loop</h1>
+    <span class="badge" id="count">Loading...</span>
+  </header>
 
-<h1>Video</h1>
+  <main class="grid" id="videoGrid">
+    <div class="loader">Scanning for videos: /1.mp4, /2.mp4, /3.mp4...</div>
+  </main>
 
-<video controls width="720">
-<source src="https://trickbd.com/wp-content/uploads/2026/08/18/Payal-bhabhi-ki-desi-chudai-sex-video-with-Hindi-audio_720-1.mp4" type="video/mp4">
-</video>
+<script>
+  const grid = document.getElementById('videoGrid');
+  const countBadge = document.getElementById('count');
+  let videoIndex = 1;
+  let loadedCount = 0;
+  const maxVideos = 100; // safety limit
 
+  async function videoExists(url) {
+    try {
+      const res = await fetch(url, { method: 'HEAD' });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  function createVideoCard(src, index) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    
+    const video = document.createElement('video');
+    video.src = src;
+    video.autoplay = true;
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+    
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.innerHTML = `<span>Video #${index}</span><span>${src}</span>`;
+    
+    card.appendChild(video);
+    card.appendChild(meta);
+    return card;
+  }
+
+  async function loadVideos() {
+    grid.innerHTML = '';
+    while (videoIndex <= maxVideos) {
+      const url = `/${videoIndex}.mp4`;
+      const exists = await videoExists(url);
+      
+      if (exists) {
+        const card = createVideoCard(url, videoIndex);
+        grid.appendChild(card);
+        loadedCount++;
+      } else {
+        // stop when we hit first missing file
+        if (loadedCount === 0) {
+          grid.innerHTML = `<div class="loader">No videos found. Add /1.mp4, /2.mp4 to this folder.</div>`;
+        }
+        break;
+      }
+      videoIndex++;
+    }
+    countBadge.textContent = `${loadedCount} video${loadedCount !== 1 ? 's' : ''} loaded`;
+  }
+
+  // Start loading on page load
+  loadVideos();
+
+  // Optional: click to unmute
+  document.addEventListener('click', (e) => {
+    if (e.target.tagName === 'VIDEO') {
+      e.target.muted = !e.target.muted;
+    }
+  });
+</script>
 </body>
 </html>
