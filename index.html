@@ -95,12 +95,12 @@
 
   // CountAPI helpers
   async function getViews(id) {
-    const res = await fetch(`https://api.countapi.xyz/get/${NAMESPACE}/video-${id}`);
+    const res = await fetch(`https://api.countapi.xyz/get/arifrawf.github.io/video-${id}`);
     const data = await res.json();
     return data.value || 0;
   }
   async function hitView(id) {
-    const res = await fetch(`https://api.countapi.xyz/hit/${NAMESPACE}/video-${id}`);
+    const res = await fetch(`https://api.countapi.xyz/hit/arifrawf.github.io/video-${id}`);
     const data = await res.json();
     return data.value;
   }
